@@ -25,8 +25,17 @@ if [[ -z "$DATABRICKS_TOKEN" ]]; then
   exit 1
 fi
 
-echo "Running dbt debug..."
+echo "Step 1: Checking dbt and Databricks connection..."
 
-exec docker compose run --rm \
+docker compose run --rm \
   -e DATABRICKS_TOKEN \
   dbt debug
+
+echo
+echo "Step 2: Starting your dbt environment..."
+
+exec docker compose run --rm -it \
+  --entrypoint /bin/bash \
+  -e DATABRICKS_TOKEN \
+  -e PS1='(dbt) \u@\h:\w\$ ' \
+  dbt --norc -i
