@@ -1,0 +1,13 @@
+services:
+  dbt:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /usr/app
+    volumes:
+      - .:/usr/app
+      - ${HOME}/.dbt:/root/.dbt
+    environment:
+      DBT_PROFILES_DIR: /root/.dbt
+    entrypoint: ["dbt"]
+    command: ["--version"]
