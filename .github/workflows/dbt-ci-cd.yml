@@ -1,0 +1,142 @@
+
+name: dbt CI/CD
+
+on:
+  pull_request:
+    branches:
+      - qa
+      - main
+
+  push:
+    branches:
+      - qa
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate dbt project
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build dbt Docker image
+        run: docker compose build dbt
+
+      - name: Configure dbt profile
+        run: |
+          mkdir -p ~/.dbt
+          cp ci/profiles.yml.example ~/.dbt/profiles.yml
+
+      - name: Debug Databricks connection
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          docker compose run --rm \
+            -e DATABRICKS_HOST \
+            -e DATABRICKS_HTTP_PATH \
+            -e DATABRICKS_TOKEN \
+            dbt debug --target dev
+
+      - name: Compile dbt models
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          docker compose run --rm \
+            -e DATABRICKS_HOST \
+            -e DATABRICKS_HTTP_PATH \
+            -e DATABRICKS_TOKEN \
+            dbt compile --target dev
+
+  deploy-qa:
+    name: Deploy to QA
+    if: github.event_name == 'push' && github.ref == 'refs/heads/qa'
+    runs-on: ubuntu-latest
+    environment: qa
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build dbt Docker image
+        run: docker compose build dbt
+
+      - name: Configure dbt profile
+        run: |
+          mkdir -p ~/.dbt
+          cp ci/profiles.yml.example ~/.dbt/profiles.yml
+
+      - name: Deploy models to QA
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          docker compose run --rm \
+            -e DATABRICKS_HOST \
+            -e DATABRICKS_HTTP_PATH \
+            -e DATABRICKS_TOKEN \
+            dbt run --target qa
+
+      - name: Test QA models
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          docker compose run --rm \
+            -e DATABRICKS_HOST \
+            -e DATABRICKS_HTTP_PATH \
+            -e DATABRICKS_TOKEN \
+            dbt test --target qa
+
+  deploy-prod:
+    name: Deploy to production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build dbt Docker image
+        run: docker compose build dbt
+
+      - name: Configure dbt profile
+        run: |
+          mkdir -p ~/.dbt
+          cp ci/profiles.yml.example ~/.dbt/profiles.yml
+
+      - name: Deploy models to production
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          docker compose run --rm \
+            -e DATABRICKS_HOST \
+            -e DATABRICKS_HTTP_PATH \
+            -e DATABRICKS_TOKEN \
+            dbt run --target prod
+
+      - name: Test production models
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          docker compose run --rm \
+            -e DATABRICKS_HOST \
+            -e DATABRICKS_HTTP_PATH \
+            -e DATABRICKS_TOKEN \
+            dbt test --target prod
